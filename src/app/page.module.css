@@ -19,8 +19,8 @@
   display: inline-flex; align-items: center; gap: 8px;
   background: rgba(99,179,237,0.08);
   border: 0.5px solid rgba(99,179,237,0.25);
-  border-radius: 24px; padding: 5px 16px;
-  font-size: 11px; color: #63b3ed;
+  border-radius: 24px; padding: 6px 18px;
+  font-size: 16.5px; color: #63b3ed;
   letter-spacing: 0.1em; margin-bottom: 1.4rem;
 }
 
@@ -30,7 +30,19 @@
   animation: pulse 2s infinite;
 }
 
+.bounceIcon {
+  display: inline-block;
+  font-size: 18px;
+  animation: bounce 1s infinite;
+  filter: drop-shadow(0 0 4px rgba(252,129,129,0.6));
+}
+
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
 
 .h1 {
   font-family: 'DM Serif Display', serif;

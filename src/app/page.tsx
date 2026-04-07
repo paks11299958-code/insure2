@@ -123,7 +123,7 @@ export default function Home() {
     <main className={styles.main}>
       <div className={styles.app}>
         <header className={styles.header}>
-          <div className={styles.badge}><span className={styles.dot}/>AI 보험 중복 분석기</div>
+          <div className={styles.badge}><span className={styles.bounceIcon}>🔴</span>AI 보험 중복 분석기</div>
           <h1 className={styles.h1}>보험 <em className={styles.em}>중복보장</em><br/>자동 분석 시스템</h1>
           <p className={styles.subtitle}>보험 문서를 업로드하면 AI가 중복 보장 항목을 파악하고<br/>절감 가능한 보험료와 맞춤형 보고서를 생성합니다</p>
           <div className={styles.supportedFormats}>
