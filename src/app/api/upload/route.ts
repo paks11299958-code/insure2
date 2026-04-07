@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
 
   try {
-    const { url } = await put(`insure/${Date.now()}_${file.name}`, file, { access: 'private' })
+    const { url } = await put(`insure/${Date.now()}_${file.name}`, file, { access: 'public' })
     return NextResponse.json({ url })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : '알 수 없는 오류'

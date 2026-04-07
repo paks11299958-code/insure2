@@ -20,6 +20,14 @@ const isImage = (n: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(n)
 const fileIcon = (n: string) => isPDF(n) ? '📕' : isImage(n) ? '🖼️' : /\.docx?$/i.test(n) ? '📘' : '📄'
 const getMediaType = (n: string) => /\.png$/i.test(n) ? 'image/png' : /\.gif$/i.test(n) ? 'image/gif' : /\.webp$/i.test(n) ? 'image/webp' : 'image/jpeg'
 
+async function toBase64(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader()
+    r.onload = e => res(((e.target?.result as string) || '').split(',')[1] || '')
+    r.onerror = () => rej(new Error('파일 읽기 실패'))
+    r.readAsDataURL(file)
+  })
+}
 async function toText(file: File): Promise<string> {
   return new Promise(res => {
     const r = new FileReader()
@@ -47,16 +55,12 @@ export default function Home() {
     })
   }, [])
 
-  const uploadToBlob = async (file: File): Promise<string> => {
-    const form = new FormData()
-    form.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: form })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || '업로드 실패')
-    return data.url as string
-  }
-
   const analyze = async () => {
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+    if (totalSize > 3 * 1024 * 1024) {
+      setError('파일 총 용량이 3MB를 초과합니다. 파일을 줄여주세요.')
+      return
+    }
     setError(''); setResult(null); setLoading(true); setStepIdx(0); setStepMsg(STEPS[0])
     let si = 0
     ivRef.current = setInterval(() => { si = (si + 1) % STEPS.length; setStepIdx(si); setStepMsg(STEPS[si]) }, 2000)
@@ -69,14 +73,14 @@ export default function Home() {
       let body: Record<string, unknown>
 
       if (pdfFiles.length > 0) {
-        setStepMsg('PDF 업로드 중...')
-        const pdfs = await Promise.all(pdfFiles.map(async f => ({ url: await uploadToBlob(f.file), name: f.name })))
+        setStepMsg('PDF를 AI에 전달 중...')
+        const pdfs = await Promise.all(pdfFiles.map(async f => ({ data: await toBase64(f.file), name: f.name })))
         let extraText = ''
         for (const f of txtFiles) extraText += `\n\n=== ${f.name} ===\n${(await toText(f.file)).slice(0, 3000)}`
         body = { pdfs, fileNames, text: extraText }
       } else if (imgFiles.length > 0) {
-        setStepMsg('이미지 업로드 중...')
-        const images = await Promise.all(imgFiles.map(async f => ({ url: await uploadToBlob(f.file), mediaType: getMediaType(f.name) })))
+        setStepMsg('이미지에서 보험 내용 추출 중...')
+        const images = await Promise.all(imgFiles.map(async f => ({ data: await toBase64(f.file), mediaType: getMediaType(f.name) })))
         let extraText = ''
         for (const f of txtFiles) extraText += `\n\n=== ${f.name} ===\n${(await toText(f.file)).slice(0, 3000)}`
         body = { images, fileNames, text: extraText }
@@ -88,6 +92,9 @@ export default function Home() {
 
       setStepMsg('AI 중복 분석 중...')
       const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const ct = res.headers.get('content-type') || ''
+      if (!ct.includes('application/json'))
+        throw new Error(`분석 서버 오류 (${res.status})`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `오류 ${res.status}`)
       setResult(data)

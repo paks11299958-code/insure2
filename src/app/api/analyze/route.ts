@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { del } from '@vercel/blob'
+
+export const maxDuration = 300
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -93,27 +94,16 @@ async function callClaude(messages: any[], system?: string) {
   })
 }
 
-// ── Private Blob → base64 변환 헬퍼 ─────────────────────
-async function fetchBase64(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-  })
-  if (!res.ok) throw new Error(`Blob 다운로드 실패: ${res.status}`)
-  const buf = await res.arrayBuffer()
-  return Buffer.from(buf).toString('base64')
-}
-
 // ── PDF 직접 분석 (document API) ──────────────────────────
-async function analyzeWithPDF(pdfs: { url: string; name: string }[]) {
-  const fetched = await Promise.all(pdfs.map(async p => ({ data: await fetchBase64(p.url), name: p.name })))
+async function analyzeWithPDF(pdfs: { data: string; name: string }[]) {
   const content = [
-    ...fetched.map(pdf => ({
+    ...pdfs.map(pdf => ({
       type: 'document',
       source: { type: 'base64', media_type: 'application/pdf', data: pdf.data },
     })),
     {
       type: 'text',
-      text: `위 PDF 보험 문서들을 분석하여 중복 보장 항목을 파악하고 아래 JSON 형식으로만 응답하세요.\n\n${JSON_SCHEMA}\n\n파일명: ${fetched.map(p => p.name).join(', ')}`,
+      text: `위 PDF 보험 문서들을 분석하여 중복 보장 항목을 파악하고 아래 JSON 형식으로만 응답하세요.\n\n${JSON_SCHEMA}\n\n파일명: ${pdfs.map(p => p.name).join(', ')}`,
     },
   ]
   return parseResult(getText(await callClaude([{ role: 'user', content }])))
@@ -121,13 +111,12 @@ async function analyzeWithPDF(pdfs: { url: string; name: string }[]) {
 
 // ── 이미지 Vision 분석 ────────────────────────────────────
 async function analyzeWithImages(
-  images: { url: string; mediaType: string }[],
+  images: { data: string; mediaType: string }[],
   fileNames: string[]
 ) {
   type ImgMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-  const fetched = await Promise.all(images.map(async img => ({ data: await fetchBase64(img.url), mediaType: img.mediaType })))
   const extractContent = [
-    ...fetched.slice(0, 10).map(img => ({
+    ...images.slice(0, 10).map(img => ({
       type: 'image' as const,
       source: {
         type: 'base64' as const,
@@ -173,19 +162,14 @@ export async function POST(req: NextRequest) {
   let body: {
     text?: string
     fileNames: string[]
-    images?: { url: string; mediaType: string }[]
-    pdfs?: { url: string; name: string }[]
+    images?: { data: string; mediaType: string }[]
+    pdfs?: { data: string; name: string }[]
   }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: '잘못된 요청 형식' }, { status: 400 })
   }
-
-  const blobUrls = [
-    ...(body.pdfs?.map(p => p.url) ?? []),
-    ...(body.images?.map(i => i.url) ?? []),
-  ]
 
   try {
     let result
@@ -203,9 +187,5 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : '알 수 없는 오류'
     console.error('분석 오류:', msg)
     return NextResponse.json({ error: `AI 분석 오류: ${msg}` }, { status: 500 })
-  } finally {
-    if (blobUrls.length > 0) {
-      await Promise.all(blobUrls.map(url => del(url))).catch(() => {})
-    }
   }
 }
